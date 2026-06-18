@@ -1,11 +1,15 @@
 # =============================================================================
 # Lidl-Angebote-Proxy fuer Beuteplan — Render-Edition
-# (Hier steht der komplette Code aus deiner ursprünglichen lidl_proxy.py)
 # =============================================================================
 import logging
 import os
+import sys
 import threading
 import time
+
+# --- WICHTIG: Arbeitsverzeichnis zum Python-Pfad hinzufügen ---
+# (seit Python 3.11 ist das aktuelle Verzeichnis nicht mehr automatisch dabei)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from flask import Flask, jsonify, request
 from flask_cors import CORS
@@ -24,18 +28,22 @@ except ImportError as exc:
         "Auf Render: stelle sicher, dass der Build Command 'bash build.sh' ist."
     ) from exc
 
+# --------------------------------------------------------------------------
+# Konfiguration ueber Environment-Variablen (alle optional)
+# --------------------------------------------------------------------------
 CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "*")
-CACHE_TTL = int(os.environ.get("CACHE_TTL_SECONDS", 6 * 3600))
+CACHE_TTL = int(os.environ.get("CACHE_TTL_SECONDS", 6 * 3600))  # 6h Default
 DEFAULT_ORT = os.environ.get("DEFAULT_ORT", "Berlin")
 DEFAULT_LAND = os.environ.get("DEFAULT_LAND", "DE")
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": CORS_ORIGINS.split(",") if CORS_ORIGINS != "*" else "*"}})
 
-_CACHE = {}
+_CACHE = {}              # (ort, land) -> (timestamp, payload)
 _CACHE_LOCK = threading.Lock()
 
 def _get(o, *keys, default=None):
+    """Holt einen Wert robust aus dict ODER Objekt."""
     for k in keys:
         if isinstance(o, dict) and k in o and o[k] is not None:
             return o[k]
@@ -49,6 +57,7 @@ def _clean(v):
     return v
 
 def normalize(offer):
+    """Bringt ein Lidl-Angebot in das von der App erwartete Schema."""
     return {
         "name":         _clean(_get(offer, "title", "label", "name", "product", "productTitle")),
         "brand":        _clean(_get(offer, "brand")),
@@ -61,6 +70,7 @@ def normalize(offer):
     }
 
 def _fetch_offers(ort, land):
+    """Tatsaechlicher Lidl-Call (nicht gecacht)."""
     with LidlPlus(country=land) as lidl:
         store, result = lidl.offers_for_store_search(ort)
     raw = _get(result, "offers", default=[]) or []
@@ -102,6 +112,7 @@ def offers():
 
 @app.route("/raw")
 def raw():
+    """Debug: zeigt die rohe Struktur des ersten Angebots."""
     ort = request.args.get("ort", DEFAULT_ORT)
     land = request.args.get("land", DEFAULT_LAND)
     try:
