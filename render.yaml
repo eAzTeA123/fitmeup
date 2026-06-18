@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: beuteplan-lidl-proxy
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: "bash build.sh"
+    # 1 Worker-Prozess + mehrere Threads, damit sich alle Requests den
+    # In-Memory-Cache in lidl_proxy.py teilen (Worker-Prozesse haetten
+    # sonst je ihren eigenen Cache).
+    startCommand: "gunicorn lidl_proxy:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 30"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: CORS_ORIGINS
+        value: "*"
+      - key: CACHE_TTL_SECONDS
+        value: "21600"
+      - key: DEFAULT_ORT
+        value: "Berlin"
+      - key: DEFAULT_LAND
+        value: "DE"
+      # Optionale Feinabstimmung des LidlPlus-Clients selbst (main.py liest
+      # diese per pydantic-settings, Prefix LIDL_). Nur setzen, wenn nötig:
+      # - key: LIDL_LATITUDE
+      #   value: "49.9456"
+      # - key: LIDL_LONGITUDE
+      #   value: "11.5713"
+      # - key: LIDL_TIMEOUT
+      #   value: "20"
