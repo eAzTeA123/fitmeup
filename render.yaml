@@ -1,20 +1,14 @@
 services:
   - type: web
-    name: beuteplan-lidl-proxy
+    name: beuteplan-proxy
     runtime: python
     plan: free
-    region: frankfurt
-    buildCommand: "bash build.sh"
-    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 30"
-    healthCheckPath: /healthz
+    buildCommand: >
+      pip install -r requirements.txt &&
+      git clone https://github.com/EvickaStudio/lidl-discounts.git &&
+      (pip install -e ./lidl-discounts || true) &&
+      cp lidl_proxy.py lidl-discounts/lidl_proxy.py
+    startCommand: cd lidl-discounts && gunicorn lidl_proxy:app --bind 0.0.0.0:$PORT --timeout 120 --pythonpath .
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.8
-      - key: CORS_ORIGINS
-        value: "*"
-      - key: CACHE_TTL_SECONDS
-        value: "21600"
-      - key: DEFAULT_ORT
-        value: "Berlin"
-      - key: DEFAULT_LAND
-        value: "DE"
+        value: "3.12.4"
